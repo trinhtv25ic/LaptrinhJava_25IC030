@@ -142,17 +142,47 @@ public class MenuPanel extends JPanel {
     }
 
     private void handleFeedbackClick() {
-        Integer[] stars = {5, 4, 3, 2, 1};
-        JComboBox<Integer> starCombo = new JComboBox<>(stars);
-        
+        JPanel starPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
+        starPanel.setOpaque(false);
+
+        ButtonGroup starGroup = new ButtonGroup();
+        JRadioButton[] starButtons = new JRadioButton[5];
+
+        String starSelectedHTML = "<html><font size='6' color='#F1C40F'>★</font></html>";
+        String starUnselectedHTML = "<html><font size='6' color='#BDC3C7'>★</font></html>";
+
+        for (int i = 0; i < 5; i++) {
+            final int rating = i + 1;
+            starButtons[i] = new JRadioButton(starUnselectedHTML);
+            starButtons[i].setOpaque(false);
+            starButtons[i].setFocusPainted(false);
+            starButtons[i].setContentAreaFilled(false);
+            starButtons[i].setBorderPainted(false);
+            starButtons[i].setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+            starButtons[i].addActionListener(e -> {
+                for (int j = 0; j < 5; j++) {
+                    if (j < rating) {
+                        starButtons[j].setText(starSelectedHTML);
+                    } else {
+                        starButtons[j].setText(starUnselectedHTML);
+                    }
+                }
+                starPanel.putClientProperty("SELECTED_RATING", rating);
+            });
+
+            starGroup.add(starButtons[i]);
+            starPanel.add(starButtons[i]);
+        }
+
         JTextArea commentArea = new JTextArea(5, 20);
         commentArea.setLineWrap(true);
         commentArea.setWrapStyleWord(true);
         JScrollPane scrollPane = new JScrollPane(commentArea);
 
         JPanel panel = new JPanel(new GridLayout(0, 1, 5, 5));
-        panel.add(new JLabel("Đánh giá số sao:"));
-        panel.add(starCombo);
+        panel.add(new JLabel("Đánh giá số sao của bạn:"));
+        panel.add(starPanel); 
         panel.add(new JLabel("Bình luận của bạn:"));
         panel.add(scrollPane);
 
@@ -165,7 +195,9 @@ public class MenuPanel extends JPanel {
         );
 
         if (result == JOptionPane.OK_OPTION) {
-            int selectedStars = (int) starCombo.getSelectedItem();
+            Object ratingObj = starPanel.getClientProperty("SELECTED_RATING");
+            int selectedStars = (ratingObj != null) ? (int) ratingObj : 5; 
+            
             String comment = commentArea.getText().trim();
             
             if (comment.isEmpty()) {

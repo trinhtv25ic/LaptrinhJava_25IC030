@@ -40,17 +40,21 @@ public class GameServer {
 
     public static synchronized void joinRoom(int roomId, ClientHandler guest) {
         GameRoom room = rooms.get(roomId);
-        if (room != null && room.guest == null) {
+        if (room != null && room.guest == null && !room.isPlaying) {
             room.guest = guest;
             guest.currentRoomId = roomId;
-            
-            room.host.sendMessage("OPPONENT_NAME:" + guest.playerName);
-            guest.sendMessage("OPPONENT_NAME:" + room.host.playerName);
-            
+            guest.sendMessage("JOIN_SUCCESS:" + roomId);
             new Thread(() -> {
+                try {
+                    Thread.sleep(250); 
+                } catch (InterruptedException e) {}
+                room.host.sendMessage("OPPONENT_NAME:" + room.guest.playerName);
+                room.guest.sendMessage("OPPONENT_NAME:" + room.host.playerName);
+                
                 try {
                     Thread.sleep(100); 
                 } catch (InterruptedException e) {}
+                
                 startRoomCountdown(room);
             }).start();
 
@@ -82,6 +86,8 @@ public class GameServer {
     }
 
     private static void startMatchTimer(GameRoom room) {
+    	room.isPlaying = true;
+    	broadcastRoomList();
     	final int[] timeLeft = {room.matchDuration};        
     	Timer matchTimer = new Timer(1000, null);
         matchTimer.addActionListener(e -> {
@@ -137,17 +143,30 @@ public class GameServer {
         if (client.currentRoomId != -1) {
             GameRoom room = rooms.get(client.currentRoomId);
             if (room != null) {
-                if (room.host == client) {
-                    if (room.guest != null) {
-                        room.guest.sendMessage("OPPONENT_LEFT");
-                        room.guest.currentRoomId = -1;
+                if (room.isPlaying) {
+                    ClientHandler winner = (room.host == client) ? room.guest : room.host;
+                    if (winner != null) {
+                        winner.sendMessage("END_RESULT:DISCONNECT_WIN:" + winner.playerName + ":" + winner.score + ":" + client.playerName + ":" + client.score);
+                        winner.currentRoomId = -1;
+                        winner.score = 0;
                     }
-                    rooms.remove(client.currentRoomId);
-                } else if (room.guest == client) {
-                    if (room.host != null) room.host.sendMessage("OPPONENT_LEFT");
-                    room.guest = null;
+                    rooms.remove(room.id);
+                } else {
+                    if (room.host == client) {
+                        if (room.guest != null) {
+                            room.guest.sendMessage("OPPONENT_LEFT");
+                            room.guest.currentRoomId = -1; 
+                        }
+                        rooms.remove(room.id);
+                    } else if (room.guest == client) {
+                        if (room.host != null) {
+                            room.host.sendMessage("OPPONENT_LEFT");
+                        }
+                        room.guest = null;
+                    }
                 }
             }
+            client.currentRoomId = -1;
         }
         broadcastRoomList();
     }
@@ -157,6 +176,7 @@ public class GameServer {
         ClientHandler host;
         ClientHandler guest;
         int matchDuration; 
+        boolean isPlaying = false;
 
         public GameRoom(int id, ClientHandler host, int matchDuration) {
             this.id = id;
@@ -189,10 +209,8 @@ public class GameServer {
                     } else if (message.equals("GET_ROOMS")) {
                         GameServer.broadcastRoomList();
                     } 
-                    // SỬA CHÍNH XÁC ĐOẠN NÀY:
                     else if (message.startsWith("CREATE_ROOM")) { 
                         int durationMinutes = 1; 
-                        
                         if (message.contains(":")) {
                             try {
                                 String[] parts = message.split(":");
@@ -203,14 +221,16 @@ public class GameServer {
                                 durationMinutes = 1; 
                             }
                         }
-                        
                         GameServer.createRoom(this, durationMinutes);
                     } 
-                    // -----------------------
                     else if (message.startsWith("JOIN_ROOM:")) {
                         int id = Integer.parseInt(message.substring(10).trim());
                         GameServer.joinRoom(id, this);
-                    } else if (message.startsWith("SCORE:")) {
+                    }
+                    else if (message.equals("LEAVE_ROOM")) {
+                        handleLeaveOrDisconnect(); 
+                    }
+                    else if (message.startsWith("SCORE:")) {
                         this.score = Integer.parseInt(message.substring(6).trim());
                         GameRoom room = rooms.get(currentRoomId);
                         if (room != null) {
@@ -220,9 +240,41 @@ public class GameServer {
                     }
                 }
             } catch (IOException e) {
+                handleLeaveOrDisconnect();
             } finally {
                 GameServer.removeClient(this);
                 try { socket.close(); } catch (IOException e) {}
+            }
+        }
+
+        private void handleLeaveOrDisconnect() {
+            if (this.currentRoomId != -1) {
+                GameRoom room = rooms.get(this.currentRoomId);
+                if (room != null) {
+                    if (room.isPlaying) {
+                        ClientHandler winner = (room.host == this) ? room.guest : room.host;
+                        if (winner != null) {
+                            winner.sendMessage("END_RESULT:DISCONNECT_WIN:" + winner.playerName + ":" + winner.score + ":" + this.playerName + ":" + this.score);
+                            winner.currentRoomId = -1;
+                            winner.score = 0;
+                        }
+                        rooms.remove(room.id);
+                    } else {
+                        if (room.host == this) {
+                            if (room.guest != null) {
+                                room.guest.sendMessage("OPPONENT_LEFT");
+                                room.guest.currentRoomId = -1;
+                            }
+                            rooms.remove(room.id);
+                        } else if (room.guest == this) {
+                            if (room.host != null) room.host.sendMessage("OPPONENT_LEFT");
+                            room.guest = null;
+                        }
+                    }
+                }
+                this.currentRoomId = -1; 
+                this.score = 0;          
+                GameServer.broadcastRoomList();
             }
         }
 

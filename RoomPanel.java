@@ -76,8 +76,11 @@ public class RoomPanel extends JPanel {
         btnLeave.setPreferredSize(new Dimension(140, 38));
         
         btnLeave.addActionListener(e -> {
-            disconnectRoom();
-            frame.showLobby(frame.getPlayerNameFieldText());
+            if (out != null) {
+                out.println("LEAVE_ROOM");
+            }
+            isListening = false; 
+            frame.showLobby(myPlayerName);
         });
         bottomPanel.add(btnLeave);
         add(bottomPanel, BorderLayout.SOUTH);
@@ -157,11 +160,12 @@ public class RoomPanel extends JPanel {
                         break;
                     } else if (response.equals("OPPONENT_LEFT")) {
                         SwingUtilities.invokeLater(() -> {
-                            JOptionPane.showMessageDialog(this, "Đối thủ đã rời phòng!", "Thông báo", JOptionPane.WARNING_MESSAGE);
-                            isListening = false;
-                            frame.showLobby(frame.getPlayerNameFieldText());
+                            JOptionPane.showMessageDialog(this, 
+                                "Đối thủ đã rời khỏi phòng chờ!", 
+                                "Thông báo", 
+                                JOptionPane.WARNING_MESSAGE);
+                            frame.showLobby(myPlayerName); 
                         });
-                        break;
                     } else if (response.equals("JOIN_FAILED")) {
                         SwingUtilities.invokeLater(() -> {
                             JOptionPane.showMessageDialog(this, "Vào phòng thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);

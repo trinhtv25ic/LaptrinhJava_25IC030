@@ -166,16 +166,14 @@ public class OnlinePanel extends JPanel {
                     } else if (response.startsWith("OPPONENT_SCORE:")) {
                         opponentScore = Integer.parseInt(response.substring(15).trim());
                         repaint();
-                    } else if (response.startsWith("END_RESULT:")) {
-                        gameOver = true;
+                    } if (response.startsWith("END_RESULT:")) {
                         String[] parts = response.split(":");
-                        String status = parts[1];
-                        String myFinalName = parts[2];
-                        int myFinalScore = Integer.parseInt(parts[3]);
-                        String oppFinalName = parts[4];
-                        int oppFinalScore = Integer.parseInt(parts[5]);
-                        handleGameEnd(status, myFinalName, myFinalScore, oppFinalName, oppFinalScore);
-                        break;
+                        String resultType = parts[1];
+                        String p1Name = parts[2];
+                        int p1Score = Integer.parseInt(parts[3]);
+                        String p2Name = parts[4];
+                        int p2Score = Integer.parseInt(parts[5]);
+                        handleGameEnd(resultType, p1Name, p1Score, p2Name, p2Score);
                     }
                 }
             } catch (IOException e) {
@@ -185,12 +183,14 @@ public class OnlinePanel extends JPanel {
 
     private void handleGameEnd(String status, String myFinalName, int myFinalScore, String oppFinalName, int oppFinalScore) {
         SwingUtilities.invokeLater(() -> {
-            JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Kết Quả Trận Đấu", true);
+            JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(this), "Kết Quả Trận Đấu", Dialog.ModalityType.APPLICATION_MODAL);
             dialog.setUndecorated(true); 
             dialog.setSize(400, 300);
             dialog.setLocationRelativeTo(this); 
 
             JPanel contentPanel = new JPanel() {
+                private static final long serialVersionUID = 1L;
+
                 @Override
                 protected void paintComponent(Graphics g) {
                     Graphics2D g2 = (Graphics2D) g.create();
@@ -200,7 +200,7 @@ public class OnlinePanel extends JPanel {
                     g2.setPaint(gp);
                     g2.fillRoundRect(0, 0, getWidth(), getHeight(), 20, 20);
                     
-                    if (status.equals("WIN")) g2.setColor(new Color(46, 204, 113));      
+                    if (status.equals("WIN")|| status.equals("DISCONNECT_WIN")) g2.setColor(new Color(46, 204, 113));      
                     else if (status.equals("LOSE")) g2.setColor(new Color(231, 76, 60)); 
                     else g2.setColor(new Color(241, 196, 15));                           
                     
@@ -219,7 +219,12 @@ public class OnlinePanel extends JPanel {
             if (status.equals("WIN")) {
                 lblTitle.setText("CHIẾN THẮNG!");
                 lblTitle.setForeground(new Color(46, 204, 113));
-            } else if (status.equals("LOSE")) {
+            }
+            else if (status.equals("DISCONNECT_WIN")) {
+                lblTitle.setText("THẮNG (ĐỐI THỦ THOÁT)!");
+                lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 24));
+                lblTitle.setForeground(new Color(46, 204, 113));
+            }else if (status.equals("LOSE")) {
                 lblTitle.setText("THẤT BẠI!");
                 lblTitle.setForeground(new Color(231, 76, 60));
             } else {
@@ -241,14 +246,17 @@ public class OnlinePanel extends JPanel {
             contentPanel.add(lblOppScore);
 
             JButton btnOk = new JButton("XÁC NHẬN") {
+                private static final long serialVersionUID = 1L;
+
                 @Override
                 protected void paintComponent(Graphics g) {
                     Graphics2D g2 = (Graphics2D) g.create();
                     g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                     g2.setColor(new Color(52, 152, 219)); 
                     g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-                    g2.dispose();
+                    
                     super.paintComponent(g);
+                    g2.dispose(); 
                 }
             };
             btnOk.setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -260,7 +268,7 @@ public class OnlinePanel extends JPanel {
             
             btnOk.addActionListener(e -> {
                 dialog.dispose();
-                disconnect();
+                //disconnect();
                 frame.showLobby(frame.getPlayerNameFieldText());
             });
             contentPanel.add(btnOk);

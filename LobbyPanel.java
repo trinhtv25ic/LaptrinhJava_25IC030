@@ -52,6 +52,37 @@ public class LobbyPanel extends JPanel {
                 BorderFactory.createEmptyBorder(5, 5, 5, 5)
         ));
         txtSearch.setText("Tìm ID...");
+        txtSearch.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            private void filter() {
+                String keyword = txtSearch.getText().trim();
+                if (keyword.isEmpty() || keyword.equals("Tìm ID...")) {
+                    if (out != null) out.println("GET_ROOMS"); 
+                } else {
+                    javax.swing.table.TableRowSorter<DefaultTableModel> sorter = new javax.swing.table.TableRowSorter<>(tableModel);
+                    roomTable.setRowSorter(sorter);
+                    sorter.setRowFilter(javax.swing.RowFilter.regexFilter("^" + keyword + "$", 0)); 
+                }
+            }
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { filter(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { filter(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { filter(); }
+        });
+
+        txtSearch.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusGained(java.awt.event.FocusEvent evt) {
+                if (txtSearch.getText().equals("Tìm ID...")) {
+                    txtSearch.setText("");
+                }
+            }
+            @Override
+            public void focusLost(java.awt.event.FocusEvent evt) {
+                if (txtSearch.getText().isEmpty()) {
+                    txtSearch.setText("Tìm ID...");
+                    roomTable.setRowSorter(null);
+                }
+            }
+        });
 
         btnCreate = createNeonButton("TẠO PHÒNG", new Color(46, 196, 182));
         btnRefresh = createNeonButton("LÀM MỚI", new Color(255, 159, 67));
@@ -117,10 +148,7 @@ public class LobbyPanel extends JPanel {
         add(footerPanel, BorderLayout.SOUTH);
 
         btnCreate.addActionListener(e -> {
-            // 1. Tạo danh sách lựa chọn thời gian
-            String[] timeOptions = {"1 phút (60s)", "3 phút (180s)", "5 phút (300s)"};
-            
-            // 2. Hiển thị hộp thoại chọn thời gian
+            String[] timeOptions = {"1 phút (60s)", "3 phút (180s)", "5 phút (300s)"};   
             String selectedTime = (String) JOptionPane.showInputDialog(
                     this,
                     "Vui lòng chọn thời gian thi đấu cho phòng:",
@@ -130,17 +158,13 @@ public class LobbyPanel extends JPanel {
                     timeOptions,
                     timeOptions[0]
             );
-            
-            // 3. Nếu người chơi chọn thời gian và bấm OK
             if (selectedTime != null) {
                 int minutes = 1;
                 if (selectedTime.contains("3 phút")) minutes = 3;
                 if (selectedTime.contains("5 phút")) minutes = 5;
-                
-                // 4. Gửi trực tiếp qua biến out có sẵn của LobbyPanel
                 if (out != null) {
                     out.println("CREATE_ROOM:" + minutes);
-                    out.flush(); // Ép dữ liệu bay lên Server ngay lập tức
+                    out.flush(); 
                     System.out.println("-> CLIENT: Đã gửi lệnh [CREATE_ROOM:" + minutes + "] lên Server.");
                 } else {
                     JOptionPane.showMessageDialog(this, "Không thể kết nối đến Server!", "Lỗi", JOptionPane.ERROR_MESSAGE);
@@ -153,6 +177,9 @@ public class LobbyPanel extends JPanel {
         });
         
         btnBack.addActionListener(e -> {
+        	if (out != null) {
+        	    out.println("LEAVE_ROOM");
+        	}
             disconnectLobby();
             frame.showMenu();
         });
@@ -162,11 +189,20 @@ public class LobbyPanel extends JPanel {
                 if (evt.getClickCount() == 2) {
                     int row = roomTable.getSelectedRow();
                     if (row != -1) {
-                        int roomId = Integer.parseInt(roomTable.getValueAt(row, 0).toString()); 
+                        String status = roomTable.getValueAt(row, 2).toString();
+                        if (status.contains("Trong trận") || status.contains("🔴")) {
+                            JOptionPane.showMessageDialog(LobbyPanel.this, 
+                                "Trận đấu đã bắt đầu, bạn không thể vào!", 
+                                "Thông báo", 
+                                JOptionPane.WARNING_MESSAGE);
+                            return; 
+                        }
                         
-                        isRunning = false;
-                        if (out != null) out.println("JOIN_ROOM:" + roomId);
-                        frame.showRoom(roomId, "GUEST", socket, in, out, localPlayerName);
+                        int roomId = Integer.parseInt(roomTable.getValueAt(row, 0).toString()); 
+                        if (out != null) {
+                            out.println("JOIN_ROOM:" + roomId);
+                            out.flush();
+                        }
                     }
                 }
             }
@@ -191,12 +227,31 @@ public class LobbyPanel extends JPanel {
                 while (isRunning && (response = in.readLine()) != null) {
                     if (response.startsWith("ROOM_LIST:")) {
                         updateRoomTable(response.substring(10));
-                    } else if (response.startsWith("ROOM_CREATED:")) {
-                    	System.out.println("-> Client đã nhận được lệnh tạo phòng thành công từ Server: " + response);
+                    } 
+                    else if (response.startsWith("ROOM_CREATED:")) {
+                        System.out.println("-> Client đã nhận được lệnh tạo phòng thành công từ Server: " + response);
                         int createdId = Integer.parseInt(response.substring(13).trim());
-                        isRunning = false;
-                        SwingUtilities.invokeLater(() -> frame.showRoom(createdId, "HOST", socket, in, out, localPlayerName));
-                        break;
+                        
+                        isRunning = false; 
+                        
+                        SwingUtilities.invokeLater(() -> {
+                            frame.showRoom(createdId, "HOST", socket, in, out, localPlayerName); 
+                        });
+                    }
+                    else if (response.startsWith("JOIN_SUCCESS:")) {
+                        int joinedId = Integer.parseInt(response.substring(13).trim());
+                        
+                        isRunning = false; 	
+                        
+                        SwingUtilities.invokeLater(() -> {
+                            frame.showRoom(joinedId, "GUEST", socket, in, out, localPlayerName); 
+                        });
+       
+                    }
+                    else if (response.equals("JOIN_FAILED")) {
+                        SwingUtilities.invokeLater(() -> {
+                            JOptionPane.showMessageDialog(this, "Phòng này đã đầy hoặc đang trong trận đấu!", "Không thể tham gia", JOptionPane.WARNING_MESSAGE);
+                        });
                     }
                 }
             } catch (Exception e) {
@@ -221,8 +276,17 @@ public class LobbyPanel extends JPanel {
                     String hostName = info[1];
                     String status = info[2];
                     String duration = info[3]; 
+                    String displayStatus;
+                    String actionText;
+                    if ("Playing".equalsIgnoreCase(status)) {
+                        displayStatus = "🔴 Trong trận";
+                        actionText = "Đầy"; 
+                    } else {
+                        displayStatus = "🟢 Trống";
+                        actionText = "Vào";
+                    }
                     
-                    tableModel.addRow(new Object[]{id, hostName, "🟢 " + status, duration, "Vào"});
+                    tableModel.addRow(new Object[]{id, hostName, displayStatus, duration, actionText});
                 }
             }
         });
