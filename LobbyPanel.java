@@ -20,7 +20,7 @@ public class LobbyPanel extends JPanel {
     private BufferedReader in;
     private boolean isRunning = false;
     private String localPlayerName = "Player";
-
+    private JTextArea chatArea;
     public LobbyPanel(GameFrame frame) {
         this.frame = frame;
         this.setLayout(new BorderLayout());
@@ -138,11 +138,51 @@ public class LobbyPanel extends JPanel {
         scrollPane.setOpaque(false);
         scrollPane.setBorder(BorderFactory.createLineBorder(new Color(50, 70, 90), 1));
         centerPanel.add(scrollPane, BorderLayout.CENTER);
+        chatArea = new JTextArea();
+        chatArea.setEditable(false);
+        chatArea.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        chatArea.setBackground(new Color(20, 30, 45));
+        chatArea.setForeground(Color.WHITE);
+        chatArea.setLineWrap(true);
+        chatArea.setWrapStyleWord(true);
+        JScrollPane chatScroll = new JScrollPane(chatArea);
+        chatScroll.setPreferredSize(new Dimension(200, 150)); 
+
+        JTextField txtChatInput = new JTextField();
+        txtChatInput.setBackground(new Color(30, 40, 55));
+        txtChatInput.setForeground(Color.WHITE);
+        txtChatInput.setCaretColor(Color.WHITE);
+
+        txtChatInput.addActionListener(e -> {
+            String text = txtChatInput.getText().trim();
+            if (!text.isEmpty()) {
+                if (out != null) {
+                    out.println("LOBBY_CHAT:" + text);
+                    out.flush();
+                }
+                txtChatInput.setText("");
+            }
+        });
+
+        JPanel chatPanel = new JPanel(new BorderLayout(5, 5));
+        chatPanel.setOpaque(false);
+        chatPanel.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createLineBorder(new Color(0, 180, 216)), 
+            "TRÒ CHUYỆN THẾ GIỚI", 0, 0, 
+            new Font("Segoe UI", Font.BOLD, 12), Color.WHITE
+        ));
+        chatPanel.add(chatScroll, BorderLayout.CENTER);
+        chatPanel.add(txtChatInput, BorderLayout.SOUTH);
+        JPanel mainCenterPanel = new JPanel(new BorderLayout(0, 10));
+        mainCenterPanel.setOpaque(false);
+        mainCenterPanel.add(scrollPane, BorderLayout.CENTER); 
+        mainCenterPanel.add(chatPanel, BorderLayout.SOUTH);  
         add(centerPanel, BorderLayout.CENTER);
+        centerPanel.add(mainCenterPanel, BorderLayout.CENTER);
 
         JPanel footerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 15));
         footerPanel.setOpaque(false);
-        btnBack = createNeonButton("TRỜI VỀ MENU", new Color(231, 76, 60));
+        btnBack = createNeonButton("TRỞ VỀ MENU", new Color(231, 76, 60));
         btnBack.setPreferredSize(new Dimension(160, 38));
         footerPanel.add(btnBack);
         add(footerPanel, BorderLayout.SOUTH);
@@ -227,7 +267,14 @@ public class LobbyPanel extends JPanel {
                 while (isRunning && (response = in.readLine()) != null) {
                     if (response.startsWith("ROOM_LIST:")) {
                         updateRoomTable(response.substring(10));
-                    } 
+                    }
+                    else if (response.startsWith("LOBBY_CHAT_BROADCAST:")) {
+                        String msg = response.substring(21);
+                        SwingUtilities.invokeLater(() -> {
+                            chatArea.append(msg + "\n");
+                            chatArea.setCaretPosition(chatArea.getDocument().getLength());
+                        });
+                    }
                     else if (response.startsWith("ROOM_CREATED:")) {
                         System.out.println("-> Client đã nhận được lệnh tạo phòng thành công từ Server: " + response);
                         int createdId = Integer.parseInt(response.substring(13).trim());

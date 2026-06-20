@@ -208,7 +208,16 @@ public class GameServer {
                         GameServer.broadcastRoomList();
                     } else if (message.equals("GET_ROOMS")) {
                         GameServer.broadcastRoomList();
-                    } 
+                    }
+                    else if (message.startsWith("LOBBY_CHAT:")) {
+                        String chatContent = message.substring(11);
+                        String broadcastMessage = "LOBBY_CHAT_BROADCAST:" + this.playerName + ": " + chatContent;
+                        for (ClientHandler client : GameServer.allClients) {
+                            if (client.out != null) {
+                                client.out.println(broadcastMessage);
+                            }
+                        }
+                    }
                     else if (message.startsWith("CREATE_ROOM")) { 
                         int durationMinutes = 1; 
                         if (message.contains(":")) {
